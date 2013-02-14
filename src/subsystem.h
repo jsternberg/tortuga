@@ -7,7 +7,7 @@
 #include <vector>
 
 struct Subsystem {
-  Subsystem(int io_threads = 1) : context_(io_threads) {}
+  Subsystem(int io_threads = 1);
   virtual ~Subsystem() {}
   Subsystem(const Subsystem&) = delete;
   Subsystem& operator=(const Subsystem&) = delete;
@@ -18,8 +18,11 @@ struct Subsystem {
   void bind(const char *addr);
   void publish(const Json::Value&);
   int run();
+  void set_update_interval(int interval);
+  virtual void update() {}
 
   zmq::context_t context_;
   std::unique_ptr<zmq::socket_t> subscribe_;
   std::unique_ptr<zmq::socket_t> publisher_;
+  long interval_;
 };
