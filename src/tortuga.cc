@@ -21,7 +21,7 @@ static string find_path(const string& progname) {
   for (;;) {
     char *next = strchrnul(path, ':');
     string prefix(path, next-path);
-    tortuga::join(prefix, progname);
+    tortuga::join_mutable(prefix, progname);
     if (tortuga::file_exists(prefix))
       return prefix;
 
@@ -59,7 +59,7 @@ static string find_libexec(const char *progname) {
   string path = find_program_path(progname);
   tortuga::dirname(path);
   if (!has_waf_lock(path))
-    tortuga::join(path, "libexec");
+    tortuga::join_mutable(path, "libexec");
   return path;
 }
 

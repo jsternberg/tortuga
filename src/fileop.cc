@@ -80,8 +80,14 @@ namespace tortuga {
     path.resize(pos);
   }
 
-  void join(string& path, const string& next) {
+  void join_mutable(string& path, const string& next) {
     path.append(1, '/');
     path.append(next);
+  }
+
+  string join(const string& path, const string& next) {
+    string newpath = path;
+    join_mutable(newpath, next);
+    return newpath;
   }
 }
