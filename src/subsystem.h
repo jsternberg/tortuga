@@ -66,9 +66,9 @@ int subsystem_main(int argc, char *argv[]) {
     }
   }
 
-  T subsystem;
-  subsystem.setup(config);
-  return subsystem.run();
+  unique_ptr<T> subsystem(new T);
+  subsystem->setup(config);
+  return subsystem->run();
 }
 
 #define SUBSYSTEM_MAIN(TYPE) \
