@@ -13,6 +13,10 @@ def configure(conf):
     conf.env.CXXFLAGS = ['-std=c++11']
 
 def build(bld):
-    bld.stlib(target='tortuga',
+    bld.stlib(name='libtortuga',
+              target='tortuga',
               source='src/subsystem.cc',
               use='zeromq jsoncpp')
+    bld.program(target='tortuga',
+                source='src/tortuga.cc src/fileop.cc',
+                use='libtortuga')
