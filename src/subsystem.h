@@ -3,6 +3,7 @@
 #include <zmq.hpp>
 #include <json/json.h>
 #include <memory>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,7 @@ struct Subsystem {
 
   /// Setup code for the Subsystem
   /// Use this instead of a constructor
-  virtual void setup() = 0;
+  virtual void setup(const Json::Value&) = 0;
 
   /// Subscribe to events from an address
   void subscribe(const char *addr);
@@ -52,3 +53,23 @@ private:
   std::unique_ptr<zmq::socket_t> publisher_;
   long interval_;
 };
+
+template <typename T>
+int subsystem_main(int argc, char *argv[]) {
+  using namespace std;
+  Json::Value config;
+  {
+    Json::Reader reader;
+    if (!reader.parse(cin, config, false)) {
+      perror("error: could not parse json from stdin");
+      return 1;
+    }
+  }
+
+  T subsystem;
+  subsystem.setup(config);
+  return subsystem.run();
+}
+
+#define SUBSYSTEM_MAIN(TYPE) \
+  int main(int argc, char *argv[]) { return subsystem_main<TYPE>(argc, argv); }

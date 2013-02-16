@@ -20,3 +20,6 @@ def build(bld):
     bld.program(target='tortuga',
                 source='src/tortuga.cc src/fileop.cc',
                 use='libtortuga')
+    bld.program(target='eventhub',
+                source='src/eventhub.cc',
+                use='libtortuga')
