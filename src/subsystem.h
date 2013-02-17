@@ -7,6 +7,11 @@
 #include <string>
 #include <vector>
 
+struct SubsystemConfig {
+  const char *progname;
+  std::string file;
+};
+
 struct Subsystem {
   Subsystem(int io_threads = 1);
   virtual ~Subsystem() {}
@@ -32,9 +37,18 @@ struct Subsystem {
   /// Bind must have been called before this function
   void publish(const Json::Value&);
 
+  /// Parse command line options for this subsystem
+  bool parse_options(int argc, char *argv[], SubsystemConfig& config);
+
+  /// Print command line usage for the subsystem
+  virtual void usage(const char *progname);
+
   /// Run the subsystem's main loop
   /// Make sure to call "setup" before this function
   int run();
+
+  /// Main command line program for the subsystem
+  int main(int argc, char *argv[]);
 
   /// Setup this subsystem to call an update function at a certain interval
   /// The run function will try to call "update" at that interval as closely
@@ -56,19 +70,8 @@ private:
 
 template <typename T>
 int subsystem_main(int argc, char *argv[]) {
-  using namespace std;
-  Json::Value config;
-  {
-    Json::Reader reader;
-    if (!reader.parse(cin, config, false)) {
-      perror("error: could not parse json from stdin");
-      return 1;
-    }
-  }
-
-  unique_ptr<T> subsystem(new T);
-  subsystem->setup(config);
-  return subsystem->run();
+  std::unique_ptr<T> subsystem(new T);
+  return subsystem->main(argc, argv);
 }
 
 #define SUBSYSTEM_MAIN(TYPE) \

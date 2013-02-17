@@ -2,6 +2,7 @@
 #include "subsystem.h"
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <unistd.h>
 #include <sys/time.h>
 using namespace std;
@@ -40,6 +41,33 @@ static int add_poll_socket(vector<zmq::pollitem_t>& pollfds,
     pollfds.push_back(fd);
   }
   return pollfds.size()-1;
+}
+
+bool Subsystem::parse_options(int argc, char *argv[], SubsystemConfig& config) {
+  config.progname = argv[0];
+  int opt;
+  while ((opt = getopt(argc, argv, "c:h")) != -1) {
+    switch (opt) {
+      case 'c':
+        config.file = optarg;
+        break;
+      case 'h':
+      default:
+        usage(config.progname);
+        return false;
+    }
+  }
+  return true;
+}
+
+void Subsystem::usage(const char *progname) {
+  fprintf(stderr,
+"usage: %s [options]\n"
+"\n"
+"options:\n"
+"  -c FILE    specify program configuration [default: stdin]\n"
+"  -h         print this help message\n"
+          , progname);
 }
 
 static long difftime(struct timeval *tv1, struct timeval *tv2) {
@@ -87,6 +115,37 @@ int Subsystem::run() {
       return 1;
   }
   return 0;
+}
+
+int Subsystem::main(int argc, char *argv[]) {
+  SubsystemConfig config;
+  if (!parse_options(argc, argv, config))
+    return 1;
+
+  if (config.file == "-")
+    config.file.clear();
+
+  Json::Value root;
+  Json::Reader reader;
+  if (!config.file.empty()) {
+    ifstream in(config.file.c_str());
+    if (!in.is_open()) {
+      perror("could not open file");
+      return false;
+    }
+
+    if (!reader.parse(in, root, false)) {
+      fprintf(stderr, "error: could not parse json\n");
+      return false;
+    }
+  } else {
+    if (!reader.parse(cin, root, false)) {
+      fprintf(stderr, "error: could not parse json\n");
+      return false;
+    }
+  }
+  setup(root);
+  return run();
 }
 
 void Subsystem::set_update_interval(int interval) {
