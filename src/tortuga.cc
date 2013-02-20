@@ -91,12 +91,17 @@ void set_interrupted_flag(int signum) {
   interrupted = true;
 }
 
+struct SubsystemConfig {
+  string command;
+  string stdin;
+};
+
 struct Tortuga;
 struct Subprocess {
   Subprocess(const string& name);
   ~Subprocess();
 
-  bool start(Tortuga *tortuga, const string& command);
+  bool start(Tortuga *tortuga, const SubsystemConfig& command);
   void read_pipe();
   bool done() const { return fd_ == -1; }
   void finish();
@@ -111,7 +116,7 @@ struct Subprocess {
 
 struct Tortuga {
   int main(int argc, char *argv[]);
-  Subprocess *add(const string& name, const string& command);
+  Subprocess *add(const string& name, const SubsystemConfig& config);
   int run();
   bool setup();
   void teardown();
@@ -162,13 +167,21 @@ void Subprocess::read_pipe() {
   }
 }
 
-bool Subprocess::start(Tortuga* tortuga, const string& command) {
+bool Subprocess::start(Tortuga* tortuga, const SubsystemConfig& config) {
   int output_pipe[2];
   if (pipe(output_pipe) < 0) {
     fprintf(stderr, "%s: pipe: %s\n", name_.c_str(), strerror(errno));
     return false;
   }
   fd_ = output_pipe[0];
+
+  int input_pipe[2];
+  if (!config.stdin.empty()) {
+    if (pipe(input_pipe) < 0) {
+      fprintf(stderr, "%s: input pipe: %s\n", name_.c_str(), strerror(errno));
+      return false;
+    }
+  }
 
   pid_ = fork();
   if (pid_ < 0) {
@@ -190,13 +203,18 @@ bool Subprocess::start(Tortuga* tortuga, const string& command) {
       if (sigprocmask(SIG_SETMASK, &tortuga->old_mask_, 0) < 0)
         break;
 
-      // Open /dev/null over stdin.
-      int devnull = open("/dev/null", O_RDONLY);
-      if (devnull < 0)
+      if (config.stdin.empty()) {
+        // Open /dev/null over stdin.
+        input_pipe[0] = open("/dev/null", O_RDONLY);
+      } else {
+        close(input_pipe[1]);
+      }
+
+      if (input_pipe[0] < 0)
         break;
-      if (dup2(devnull, 0) < 0)
+      if (dup2(input_pipe[0], 0) < 0)
         break;
-      close(devnull);
+      close(input_pipe[0]);
 
       if (dup2(output_pipe[1], 1) < 0 ||
           dup2(output_pipe[1], 2) < 0)
@@ -206,7 +224,7 @@ bool Subprocess::start(Tortuga* tortuga, const string& command) {
       error_pipe = 2;
       close(output_pipe[1]);
 
-      execl("/bin/sh", "/bin/sh", "-c", command.c_str(), (char *) NULL);
+      execl("/bin/sh", "/bin/sh", "-c", config.command.c_str(), (char *) NULL);
     } while (false);
 
     // If we get here, something went wrong; the execl should have
@@ -220,6 +238,15 @@ bool Subprocess::start(Tortuga* tortuga, const string& command) {
   }
 
   close(output_pipe[1]);
+  if (!config.stdin.empty()) {
+    close(input_pipe[0]);
+    string stdin = config.stdin;
+    do {
+      ssize_t len = write(input_pipe[1], stdin.data(), min<size_t>(stdin.size(), 4096));
+      stdin.erase(0, len);
+    } while (!stdin.empty());
+    close(input_pipe[1]);
+  }
   return true;
 }
 
@@ -289,7 +316,15 @@ int Tortuga::main(int argc, char *argv[]) {
         break;
       }
 
-      add(subsystem["name"].asString(), subsystem["command"].asString());
+      string name = subsystem["name"].asString();
+      SubsystemConfig subsystemConfig;
+      subsystemConfig.command = subsystem["command"].asString();
+
+      if (subsystem.isMember("config")) {
+        Json::FastWriter writer;
+        subsystemConfig.stdin = writer.write(subsystem["config"]);
+      }
+      add(name, subsystemConfig);
     }
     status = run();
   } while(false);
@@ -297,9 +332,9 @@ int Tortuga::main(int argc, char *argv[]) {
   return status;
 }
 
-Subprocess *Tortuga::add(const string& name, const string& command) {
+Subprocess *Tortuga::add(const string& name, const SubsystemConfig& config) {
   Subprocess *subprocess = new Subprocess(name);
-  if (!subprocess->start(this, command)) {
+  if (!subprocess->start(this, config)) {
     delete subprocess;
     return nullptr;
   }
